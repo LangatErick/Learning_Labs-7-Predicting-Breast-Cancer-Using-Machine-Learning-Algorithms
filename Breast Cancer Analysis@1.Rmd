@@ -1,0 +1,192 @@
+---
+title: "Breast Cancer Analysis"
+author: "ERICK@"
+date: "2024-04"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## **Breast Cancer Analysis**
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. ##SUMMARY Summary: **Early diagnosis of cancer is critical for its successful treatment**. Thus, there is a high demand for accurate and cheap diagnostic methods. In this project we explored the applicability of decision tree machine learning techniques (**CART, Random Forests, and Boosted Trees,Naive Bayes**) for breast cancer diagnosis using digitized images of tissue samples. The data was obtained from UC Irvine Machine Learning Repository (“Breast Cancer Wisconsin data set” created by William H. Wolberg, W. Nick Street, and Olvi L. Mangasarian). The most accurate traditional method for diagnostic is a rather invasive technique, called breast biopsy, where a small piece of breast tissue is surgically removed, and then the tissue sample has to be examined by specialist. However, a much less invasive technique can be used, where the samples can be obtained by a minimally invasive fine needle aspirate method. The sample obtained by this method can be easily digitized and used for computationally based diagnostic. Using machine learning methods for diagnostic can significantly increase processing speed and on a big scale can make the diagnostic significantly cheaper.
+
+Here we studied the applicability of **Random Forests** and **Boosted Trees methods and Naive Bayes for cancer prediction**. We used CART method for comparison as well. The CART model achieved an estimated accuracy of about 91%. Random Forests 94% and Boosted Trees models achieved an estimated accuracy of about 97% on this dataset.
+
+### **Data Cleaning and Loading**
+
+First the necessary libraries are loaded in R environment. ggplot library is used to make plots, corrplot is used to make corelation plots, caret is used to make data processing and machine learning
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(caret)
+library(e1071)#SVM, NAIVEBAYES MODELS
+library(randomForest)#RANDOMFOREST MODEL
+library(gridExtra, )
+library(pROC)
+library(corrplot)
+library(janitor)
+```
+
+### **Data loading**
+
+The data is taken from UCI Repository and downloaded and saved into the localmachine
+
+```{r warning=FALSE, message=FALSE}
+df <- read_csv("C:/Users/langa/OneDrive/Desktop/Dataset/BreastCancersData.csv")
+```
+
+### **Seeing the structure and the summary of the data**
+
+```{r warning=FALSE, message=FALSE}
+glimpse(df)
+df$diagnosis <- as_factor(df$diagnosis)
+levels(df$diagnosis)
+view(df)
+sum(duplicated(df))#no duplicates
+df$...33 <- NULL#REMOVE UNNECESARY VARIABLE
+#remove ID COLUM
+df$id <- NULL
+
+```
+
+```{r}
+## we find that there are no missing values
+## we find that data is little unbalanced
+df %>% tabyl(diagnosis) %>% adorn_pct_formatting()#percentage composition
+```
+
+```{r}
+## we then show some correlation 
+
+df %>% select(-diagnosis) %>% cor() %>% corrplot()
+```
+
+### **Modelling**
+
+We are going to get a training and a testing set to use when building some models:
+
+```{r warning=FALSE, message=FALSE}
+## We are going to get a training and a testing set to use when building some models:
+set.seed(1234)
+library(rsample)
+split <- initial_split(df, prop = 7/10)
+train_data <- training(split)
+test_data <- testing(split)
+
+```
+
+#### Applying learning models
+
+```{r  warning=FALSE, message=FALSE}
+
+## Applying learning models
+fitControl <- trainControl(method="cv",
+               number = 5,
+               preProcOptions = list(thresh = 0.99),#threshold for pca preprocess
+               classProbs = TRUE,
+               summaryFunction = twoClassSummary)
+```
+
+### **Model1: Random Forest**
+
+Building the model on the training data
+
+```{r warning=FALSE, message=FALSE}
+## random forest
+model_rf <- train(diagnosis~.,
+                  train_data,
+                  method="ranger",
+                  metric="ROC",
+                  #tuneLength=10,
+                  #tuneGrid = expand.grid(mtry = c(2, 3, 6)),
+                  preProcess = c('center', 'scale'),
+                  trControl=fitControl)
+```
+
+#### Testing on the testing data
+
+```{r}
+## testing for random forets
+pred_rf <- predict(model_rf, test_data)
+cm_rf <- confusionMatrix(pred_rf, test_data$diagnosis, 
+                         positive = "M")
+cm_rf
+```
+
+#### We find that accuracy of this model is 95%
+
+### **Model2: Naive Bayes**
+
+Building and testing the model
+
+```{r}
+# install.packages("klaR")
+# model_nb <- train(diagnosis~.,
+#                   train_data,
+#                   method="nb",
+#                   metric="ROC",
+#                   #tuneLength=10,
+#                   #tuneGrid = expand.grid(mtry = c(2, 3, 6)),
+#                   preProcess = c('center', 'scale'),
+#                   trControl=fitControl)
+
+model_nb <- naiveBayes(diagnosis~., data=train_data)
+
+```
+
+```{r}
+## testing for random forets
+pred_nb <- predict(model_nb, test_data)
+cm_nb <- confusionMatrix(pred_nb, test_data$diagnosis, 
+                         positive = "M")
+cm_nb
+```
+
+#### Accuracy of this model is found to be 91%
+
+### **Model3: Boosted tree**
+
+```{r warning=FALSE, message=FALSE}
+library(gbm)
+set.seed(1)
+gbm_model <- train(diagnosis ~ ., train_data, method="gbm", verbose=FALSE)
+gbm_model
+```
+
+```{r}
+gbm_model$finalModel
+```
+
+```{r}
+#Performance on testing set:
+
+pred5 <- predict(gbm_model, test_data)
+confusionMatrix(pred5, test_data$diagnosis, positive="M")
+```
+
+**Accuracy was found to be 96%**
+
+### Logistic Regression
+
+```{r}
+log_model <- glm(diagnosis~., data = train_data, family = 'binomial')
+pred_log <- predict(log_model,test_data, type = 'response')
+```
+
+```{r warning=FALSE, message=FALSE}
+roc(test_data$diagnosis, pred_log, percent=TRUE, plot=TRUE,
+    print.auc=TRUE)
+```
+
+**Accuracy was found to be 92%**
+
+## **Accuracy Measure**
+
+Boosted Tree: 96% Random Forest : 95%, Logistic Regression: 92%, Naive Bayes : 91% .
+
+Boosted tree method has given the best accuracy among the four
